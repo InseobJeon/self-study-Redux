@@ -1,4 +1,4 @@
-# 08/25, redux(2)
+<!-- # 08/25, redux(2) -->
 
 # Learning `Redux` from scratch
 
@@ -300,6 +300,423 @@ reducer의 순수함수적 성격을 유지하기 위해서 절대로 해서는 
 
 마지막 줄이 핵심이다. Reducer 는 그저 연산(Just a calculation) 만 하라고 한다. 
 
+자, 이제 우리가 이전에 정의한 `action` 에 근거하는 reducer 를 작성해보자. 일단은 초기 상태(`initial state`) 를 잡아주어야 한다. 우리의 reducer 는 처음에는 `undefined` state 를 호출할 것이다. 그래서 초기 state 를 `todoApp` 이라는 `reducer` 의 인자, `state` 의 기본값으로 넘겨준다. `state===undefined? : state = initialState` 와 같은 조건문으로 해 주어도 되지만, 이 과정은 ES6 의 default parameter  를 이용하여 하는 것이 더욱 간결하다. 
+
+```jsx
+import { VisibilityFilters } from './actions'
+
+const initialState = {
+  visibilityFilter: VisibilityFilters.SHOW_ALL,
+  todos: []
+}
+
+// todoApp's state argument's defaul parameter is initialState
+function todoApp(state = initialState, action) {
+  // For now, don't handle any actions
+  // and just return the state given to us.
+  return state
+}
+```
+
+```jsx
+import {
+  SET_VISIBILITY_FILTER,
+  VisibilityFilters
+} from './actions'
+
+...
+
+function todoApp(state = initialState, action) {
+  switch (action.type) {
+    case SET_VISIBILITY_FILTER:
+      return Object.assign({}, state, {
+        visibilityFilter: action.filter
+      })
+    default:
+      return state
+  }
+}
+```
+
+이제 `switch / case` 를 통해서 `reducer` 를 마저 완성해보자. todoApp 이라는 reducer 에서 `action.type` 이 `SET_VISIBILITY_FILTER` 인 경우, `Object.assign()` 을 통해서 빈 객체에 `state` 의 속성들, 그리고 `{visibilityFilter: action.filter}` 라는 객체의 속성들을 복제한 뒤 그것을 return 한다. 이전 state 와 새로운 state 가 합쳐져서 새로운 state 를 반환하고, side effect, API calling, Transition Routing, non-pure function calling 등이 전혀 없는 순수함수(pure function)의 조건을 만족하였다. 
+
+공식 문서에서는  `Object.assign(state, { visibilityFilter: action.filter }` 와 같이 `state` 에 복제하지 말라는 말을 엄청나게 강조하고 있다. 위의 코드처럼 첫 번째 인자로 `{}`, 빈 객체를 새로 만들고 거기다가 속성들을 복사하여 그 새로 만든, 그리고 나머지 인자들의 속성들이 복제되어 들어간 그 빈 객체를 return 하라고 한다(You must supply an empty object as the first parameter)
+
+그리고 `default:` 라는 케이스, 그러니까 우리가 감지하지 않은 `action.type` 에 대해서는 그냥 기존의 state 를 흘려보내는 식으로 처리하라고 한다.
+
+### Handling More Actions
+
+두 개의 action 을 더 추가해보자. 우리가 `SET_VISIBILITY_FILTER` 를 추가했던 것처럼, `ADD_TODO`, 그리고 `TOGGLE_TODO` 를 추가한다. 그리고 우리의 `reducer` 를 그에 맞춰서 더 확장해주자 
+
+```jsx
+import { ADD_TODO,
+         TOGGLE_TODO,
+         VisibilityFilters, 
+         SET_VISIBILITY_FILTER
+        } from './actions'
+
+const initialState = {
+  visibilityFilter: VisibilityFilters.SHOW_ALL,
+  todos: []
+}
+
+function todoApp(state = initialState, action) {
+  switch (action.type) {
+    case SET_VISIBILITY_FILTER:
+      return Object.assign({}, state, {
+        visibilityFilter: action.filter
+      })
+    case ADD_TODO:
+      return Object.assign({}, state, {
+        todos: [
+          ...state.todos,
+          {
+            text: action.text,
+            completed: false
+          }
+        ]
+      })
+		
+    default:
+        return state;
+  }
+}
+```
+
+이전과 마찬가지로 `state` 를 직접 수정(wrtie)하지 않는다. 대신 우리는 새로운 객체를 `Object.assign()` 을 통해 return 해 줄 뿐이다. 새로운 `todos` 항목들은 위의 `Object.assign()` 메서드를 기반으로 빈 객체인 target 에 기존 `state.todos` 를 spread operator 로 받아와 복사하고, 새로운 객체 하나가 뒤에 복사된 뒤 그렇게 복사된 것들을 return 한다. 사실상 순차적으로 이어붙여진(conctaten) 것이다. 새로운 todo 는 action 으로부터 가져온 데이터에 기반하여 갱신된다는 사실을 잘 알아두자. 
+
+이제 마지막으로! `TOGGLE_TODO` 핸들러를 추가해보자
+
+```jsx
+import { ADD_TODO,
+         TOGGLE_TODO,
+         VisibilityFilters, 
+         SET_VISIBILITY_FILTER
+        } from './actions'
+
+const initialState = {
+  visibilityFilter: VisibilityFilters.SHOW_ALL,
+  todos: []
+}
+
+function todoApp(state = initialState, action) {
+  switch (action.type) {
+    case SET_VISIBILITY_FILTER:
+      return Object.assign({}, state, {
+        visibilityFilter: action.filter
+      })
+    case ADD_TODO:
+      return Object.assign({}, state, {
+        todos: [
+          ...state.todos,
+          {
+            text: action.text,
+            completed: false
+          }
+        ]
+      })
+    case TOGGLE_TODO:
+      return Object.assign({}, state, {
+        todos: state.todos.map((todo, index) => {
+          if (index === action.index) {
+            return Object.assign({}, todo, {
+              completed: !todo.completed
+            })
+          }
+          return todo
+        })
+      })
+    default:
+        return state;
+  }
+}
+```
+
+`case TOGGLE_TODO:` 도 마찬가지로 `Object.assign()` 을 통해 객체를 복사하는 것부터 시작한다. 그리고 `todos` 또한 `map()` 을 통해 복사를 해서 immutability 를 유지한다. 만약 우리가 만들어 놓은 `toggleTodo` 라는 메서드가 호출되어 index 가 return 되면, 조건문을 통해 action.index 와 같은 todo 를 찾고, 해당 todo 의 `completed` 라는 state 를 `!todo.completed` 로 값을 반전시켜준다. 
+
+여기서 또 유의할 점은, immutability 를 지키기 위해 `TOGGLE_TODO` 로 호출된 todo 마저도 `Object.assign()` 을 통해서 복사해준다는 점이다. 
+
+### Splitting Reducers
+
+```jsx
+function todoApp(state = initialState, action) {
+  switch (action.type) {
+    case SET_VISIBILITY_FILTER:
+      return Object.assign({}, state, {
+        visibilityFilter: action.filter
+      })
+    case ADD_TODO:
+      return Object.assign({}, state, {
+        todos: [
+          ...state.todos,
+          {
+            text: action.text,
+            completed: false
+          }
+        ]
+      })
+    case TOGGLE_TODO:
+      return Object.assign({}, state, {
+        todos: state.todos.map((todo, index) => {
+          if (index === action.index) {
+            return Object.assign({}, todo, {
+              completed: !todo.completed
+            })
+          }
+          return todo
+        })
+      })
+    default:
+      return state
+  }
+}
+```
+
+이제 우리의 `reducer` 코드가 완성되었다. 그런데 약간은 난잡한(rather verbose) 감이 없잖아 있는 편이다. 그렇다면, 이 코드를 조금 더 이해하기 쉽게(easier to comprehend) 나눠볼 수는 없을까? 
+
+생각해 보면 우리는 지금 `visibilityFilter` 라는 상태와 `todos` 라는 상태를 변화시키고 있는데, 이 둘의 관계는 독립적이라고 볼 수 있다. isibilityFilter 가 달라지는 것과 todo tasks 들이 달라지는 건 별도의 관계이다. 물론, 의존적인 관계였다면 이야기는 달라지겠지만 우리의 경우는 그렇지 않으니 해당 `reducer` 를 나눌 수 있겠다. 
+
+```jsx
+import { ADD_TODO,
+         TOGGLE_TODO,
+         VisibilityFilters, 
+         SET_VISIBILITY_FILTER
+        } from './actions'
+
+const initialState = {
+  visibilityFilter: VisibilityFilters.SHOW_ALL,
+  todos: []
+}
+
+function todos(state = [], action) {
+	switch (action.type) {
+		case ADD_TODO:
+			return [
+				...state,
+				{
+					text: action.text,
+					completed: false
+				}
+			]
+		case TOGGLE_TODO: 
+			return state.map((todo, index) => {
+				if (index === action.index) {
+					return Object.assign({}, todo, {
+						completed: !todo.completed
+					})
+				}
+			 return todo
+			})
+		default:
+			return state
+	}
+}
+
+function todoApp(state = initialState, action) {
+  switch (action.type) {
+    case SET_VISIBILITY_FILTER:
+      return Object.assign({}, state, {
+        visibilityFilter: action.filter
+      })
+    case ADD_TODO:
+      return Object.assign({}, state, {
+        todos: todos(state.todos, action)
+      })
+    case TOGGLE_TODO:
+      return Object.assign({}, state, {
+        todos: todos(state.todos, action)
+      })
+    default:
+      return state
+  }
+}
+```
+
+새로 만든 reducer 인 `todos` 에 주목하라. 마찬가지로 저 reducer 의 인자에도 action 과 함께 `state` 를 넣어주었다. 혹시라도 처음 reducer 가 호출되어 state 에 `undefined` 를 집어넣는 경우를 대비해, 아직 state 가 없는 경우를 대비하여 `default parameter` 도 마찬가지로 넣어주었다. 
+
+그러나 차이점이 존재한다. 우리가 나눠내기 전의 reducer 인 `todoApp` 의 `default parameter` 는  `initialState` 인 것였다. 반면, 새로 만든 reducer 인 `todos` 의 인자 state 의 default parameter 는 비어있는 배열(`[]`)이라는 차이점이 있다. 
+
+우리는 이렇게 reducer 를 나누어 줌으로써 각각의 reducer 가 관리하는 상태들도 분리하였다. 역할을 명확히 분리하여 가독성과 코드 이해를 높인 것이다. 이러한 reducer 의 역할 기준 분할을 reducer 합성 (reducer composition) 이라고 하며, 이는 Redux 를 사용하여 만드는 애플리케이션에 사용하는 아주 기초적인 패턴이라고 할 수 있다. (This is called reducer composition, and it's the fundamental pattern of building Redux apps)
+
+이제 이렇게 나누어 놓은 reducer 들을 하나의 Object 로 합쳐보자. 
+
+```jsx
+import { ADD_TODO,
+         TOGGLE_TODO,
+         VisibilityFilters, 
+         SET_VISIBILITY_FILTER
+        } from './actions'
+
+const { SHOW_ALL } = VisibilityFilters
+
+function todos(state = [], action) {
+  switch (action.type) {
+    case ADD_TODO:
+      return [
+        ...state,
+        {
+          text: action.text,
+          completed: false
+        }
+      ]
+    case TOGGLE_TODO:
+      return state.map((todo, index) => {
+        if (index === action.index) {
+          return Object.assign({}, todo, {
+            completed: !todo.completed
+          })
+        }
+        return todo
+      })
+    default:
+      return state
+  }
+}
+
+function visibilityFilter(state = SHOW_ALL, action) {
+  switch (action.type) {
+    case SET_VISIBILITY_FILTER:
+      return action.filter
+    default:
+      return state
+  }
+}
+
+function todoApp(state = {}, action) {
+  return {
+    visibilityFilter: visibilityFilter(state.visibilityFilter, action),
+    todos: todos(state.todos, action)
+  }
+}
+```
+
+하나로 다 합쳐져 있던 reducer 를 state 에 따라 나누어 주고, 그리고 그 나눠낸 reducer 들을 그렇게 관리한 state 들을 통합하는 reducer 안에서 부품과도 같이 사용해주었다. 이렇게 되면 우리가 처음에 썼던 `initialState` 와도 같은 초기값을 할당해 주는 번거로움도 없어지고, 코드의 명확성도 더욱 올릴 수 있다. 
+
+중요한 점이 있다면 각각의 reducer 가 참고하는 `global` scope 에 있는 state 를 관리한다는 사실이다. state 라는 parameter 는 각각의 reducer 마다 다르며, 그 각각의 state 는 전체의 state 의 일부 중 그들이 관리하는 state 라는 사실을 명심하자. 
+
+이제 정말 마지막 과정이다. `combineReducers()` 라는 Redux 측에서 제공하는 메서드를 사용해보자. 우리는 이 메서드를 통해서 방금 만든  `todoApp` , 그러니까 각각의 reducer 로 관리하는 state 의 일부분을 통합해서 return 하는 reducer 를 더욱 간단하게 정리할 수 있다. 
+
+```jsx
+import { combineReducers } from 'redux'
+
+const todoApp = combineReducers({
+  visibilityFilter,
+  todos
+})
+
+export default todoApp
+```
+
+위에 작성한 코드는 밑의 코드를 export 한 것과 똑같다. 
+
+```jsx
+export default function todoApp(state = {}, action) {
+  return {
+    visibilityFilter: visibilityFilter(state.visibilityFilter, action),
+    todos: todos(state.todos, action)
+  }
+}
+```
+
+이렇게 해서 만들어진 reducer 코드가 완성되었다
+
+```jsx
+import { combineReducers } from 'redux'
+import {
+  ADD_TODO,
+  TOGGLE_TODO,
+  SET_VISIBILITY_FILTER,
+  VisibilityFilters
+} from './actions'
+const { SHOW_ALL } = VisibilityFilters
+
+function visibilityFilter(state = SHOW_ALL, action) {
+  switch (action.type) {
+    case SET_VISIBILITY_FILTER:
+      return action.filter
+    default:
+      return state
+  }
+}
+
+function todos(state = [], action) {
+  switch (action.type) {
+    case ADD_TODO:
+      return [
+        ...state,
+        {
+          text: action.text,
+          completed: false
+        }
+      ]
+    case TOGGLE_TODO:
+      return state.map((todo, index) => {
+        if (index === action.index) {
+          return Object.assign({}, todo, {
+            completed: !todo.completed
+          })
+        }
+        return todo
+      })
+    default:
+      return state
+  }
+}
+
+const todoApp = combineReducers({
+  visibilityFilter,
+  todos
+})
+
+export default todoApp
+```
+
+---
+
+ 
+
+## Store
+
+### Store
+
+> The Store is the object that brings them(action, reducer) together. The store has the following responsibilities
+
+Redux 의 Store 는 action 과 reducer 를 담는 Object이다. 그리고 이 store 는 하기한 사항들을 준수한다(The store has the following responsibilities)
+
+- Holds application's state
+- Allow access to state via `getState()`
+- Allow state to be updated via `dispatch(action)`
+- Registers listeners via `subscribe(listener)`
+- Handles unregistering of listeners via the function returned by `subscribe(listener)`
+
+그러니까 state 에 접근하기 위해서는 `getState()`, state 를 업데이트 하기 위해서는 `dispatch(action)`, 리스너를 생성하기 위해서는 `subscribe(listener)`, 그리고 등록되지 않은 리스너를 관리하기 위해서는 `subscribe(listener)` 의 return 값으로 날아오는 함수를 통해 활용하라고 한다. 
+
+Redux 의 store 는 "단 하나" 라는 사실을 아는 것이 매우 중요하다. 
+
+reducer 를 미리 구현해 놓았기 때문에, store 를 만드는 과정은 쉽다. 우리가 `combineReducers()` 를 통해서 여러가지의 reducer 들을 합쳐놓았기 때문에(`todoApp` 으로 합쳐놓았었다), 그것을 import 로 불러와 주고, redux 모듈로부터 `createStore()` 메서드를 불러온 뒤, 그 안에 인자로 넣어주면 된다. 
+
+```jsx
+import { createStore } from 'redux'
+import todoApp from './reducers'
+const store = createStore(todoApp)
+```
+
+부가적인 선택지로 초기값(initial state)으로 잡아주고 싶은 값을 `createStore()` 의 두 번째 인자로 넘겨줄 수도 있다. 이렇게 하는 초기값 설정은 client 의 state 를 서버에서 돌아가는 redux 를 통해 구현한 애플리케이션의 state 와 `hydrating` 하는데 매우 유용하다
+
+### Dispatching Actions
+
+우리는 `createStore()` 메서드를 통해 store 까지도 만들었다. 이제 우리의 프로그램이 작동하는지 확인해보자! UI 가 없더라도, 콘솔을 통해서 테스트해볼 수 있다... 라고 하는데, 어떻게 작동시켜야 할지 모르겠다. 일단 모르겠으니 나중에 하는 방법을 알게 되면 돌아와서 테스트 해 보고, 그 다음단계로 넘어가보자. 
+
+## Data Flow
+
+### Data Flow
+
+> Redux architecture revolves around a strict unidirectional data flow.
+
+Redux 의 아키텍처는 엄격한 단방향의 데이터 흐름(strict unidirectional data flow) 를 중요하게 여긴다. 
+
+이 말을 풀어서 설명하자면, (Redux를 통해 만든) 애플리케이션의 모든 데이터들은 동일한 life cycle pattern 에 따르며, 이 덕분에 내가 만든 애플리케이션의 코드의 결과물을 예상하기 쉬워지며, 또 이해하기 쉬워진다. 또한 이는 데이터 정규화(data normalization)을 더욱 쉽게끔 만들어 주기 때문에 각각 독립적이고, 여러 개의 같은 데이터가 복제되어 존재하는 일들을 막아준다, 즉 DB를 더 깔끔하게 짜는데 도움이 된다는 의미이다! 
+
 ---
 
 # Nested Concepts
@@ -348,3 +765,110 @@ Redux let you compose `reducer` rather than deal the the entire app state inside
 [Step by step guide of simple routing transition effect for React - with react-router v4 and...](https://medium.com/@khwsc1/step-by-step-guide-of-simple-routing-transition-effect-for-react-with-react-router-v4-and-9152db1566a0)
 
 전환요청을 분기해놓는 행위라는 의미이다. SPA 에서는 요청에 따른 컴포넌트 간의 전환을 통해 전환된 컴포넌트를 새로이 렌더링하는 행위를 말한다. Redux 측에서는 reducer 를 사용할 때 state storage 의 immutable 한 상태를 유지하게끔 하고, pure function 을 위한 no-side-effect 를 강조하고 있는데 reducer 단에서 위와 같은 routing transition 을 하게 된다면 함수 그 자체가 아닌 외부를 건드리게 되어 side effect 가 발생할 것을 우려해 하지 말라고 못박아 놓은 듯 하다.
+
+## `switch, case`
+
+참조한 글 : 
+
+[switch](https://developer.mozilla.org/ko/docs/Web/JavaScript/Reference/Statements/switch)
+
+```jsx
+let caseFunction = (fruit) => {
+    switch(fruit) {
+        case "orange":
+            console.log("i love orange");
+            break;
+        case "grape":
+            console.log("hmm... grape? so so");
+            break;
+        case "mango":
+            console.log("mango!! it's my favorite fruit ever!!");
+            break;
+        default:
+            console.log("is any there no more fruit not these?");
+    }
+}
+```
+
+`switch` 기능을 수행하는 `caseFunction` 을 작성해보았다. 작동 과정은 인자로 들어온 `fruit` 를 `case` 의 값과 비교한다. 값을 비교할 때는 엄격한 비교(`strict comparison`, `===`)를 통해 비교한다. 어떻게 보면 조금 더 간결하고 인간의 언어와 닮은 `if` 문이라고 볼 수 있겠다. 
+
+Redux 공식 문서의 `switch` 를 통해 만든 `reducer` 는 `action.type` 이 `SET_VISIBILITY_FILTER` 인지, 아닌지(`default`) 를 비교하는 조건분기식이라고 볼 수 있겠다. 
+
+## `Obejct.assign()`
+
+참조한 글 : 
+
+[Object.assign()](https://developer.mozilla.org/ko/docs/Web/JavaScript/Reference/Global_Objects/Object/assign)
+
+열거할 수 있는 하나 이상의 속성을 가진 객체로부터 다른 객체로 속성을 복사할 때 사용하는 메서드이다. 
+
+```jsx
+let obj1 = {a: 1}
+let obj1Assigned = obj1
+obj1.b = 2;
+
+obj1
+//{a: 1, b: 2}
+obj1Assigned
+//{a: 1, b: 2}
+
+Boolean(obj1 === obj1Assigned)
+//true
+```
+
+다른 변수에 객체를 할당하는 식으로 넣는다면 원본 객체가 변경되는 순간 같이 변경된다. 그리고 그 둘이 같은지 엄격한 비교를 통해 확인해 보면, 같다고 나온다. 
+
+그러나 `Object.assign()` 을 사용하면, 이야기가 달라진다. 해당 메서드의 구조는 `Object.assign(target, ...sources)` 으로, target 이란 인자로 받는 객체에 source(하나 이상이 될 수 있다)들의 속성들(properties)이 복제된다. 
+
+```jsx
+let obj2 = {a: 1}
+let obj2WithAssignMethod = Object.assign({}, obj2);
+
+obj2.b = 2
+
+obj2
+//{a: 1, b: 2}
+
+obj2WithAssignMethod
+//{a: 1}
+
+Boolean(obj2 === obj2WithAssignMethod)
+//false
+```
+
+엄연히 다른 객체로 인식되며, 원본 객체가 변경되어도 `Object.assign` 을 통해 속성을 복제받고 새로 만들어진 객체(여기서는 `obj2WithAssignMethod`) 변하지 않는다. 즉, `immutable` 한 속성을 유지할 수 있는 것이다. 그렇기 때문에 redux 의 reducer 에서는 객체를 복제할 때 해당 메서드를 사용한다. 
+
+## `hydrating` meaning in programming
+
+참조한 글 : 
+
+[What does it mean to hydrate an object?](https://stackoverflow.com/questions/6991135/what-does-it-mean-to-hydrate-an-object)
+
+질문자 또한 Hydrating 이 무엇인지 잘 몰라서 프로그래밍에서 Hydrating 이 어떤 의미로 쓰이는지 물어보았다. 그 곳에 달린 답변을 보았다. Java 와 관련된 답변이지만 언어에 국한되는 개념은 아닌 거 같아서 참고하여 정리한다.
+
+> **With respect to the more generic term hydrate**
+Hydrating an object is taking an object that exists in memory, that doesn't yet contain any domain data ("real" data), and then populating it with domain data (such as from a database, from the network, or from a file system).
+
+어떠한 Object 를 `hydrate` 한다는 것은 메모리 안에 존재하는, 그러나 어떠한 domain data 도 아직 가지고 있지 않은 Object 에다가 데이터베이스나, 네트워크, 혹은 파일 시스템으로부터 값을 받아서 그 값을 넣어주는 행위를 의미한다(`populating`) 
+
+그러니까 데이터베이스나 웹 서버에서 어떤 데이터를 참조는 하는데, 그 데이터를 아직 실제로 받아오지는 않은 상황이라는 이야기이다.
+
+그렇다면 Redux 공식 문서의 "This is useful for hydrating the state of the client to match the state of a Redux application running on the server" 는, 아래와 같이 이해하면 될 듯 하다.
+
+`createStore(reducer, inital_data)` 와 같이 두 번째 인자로 초기값을 할당해 주는 경우는 client 의 state 가 서버의 state 에 맞추어 데이터를 미리 참조하고 차차 받아오게 하는 상황(hydrating) 에 굉장히 유용합니다. 
+
+추가로 populating 이라는 단어도 프로그래밍에서 어떻게 쓰이는지를 잘 몰라 검색해서 quora 링크를 통해 답변을 찾을 수 있었다. 일반적으로는 데이터베이스 테이블이나 객체, 변수, 혹은 UI form 에 값을 넣어주는 행위라고 한다. 
+
+> Populating, the term is often used to mean to put values into - normally refers to either a database table, an object/variable, or a user interface form.
+
+## `data normalization`
+
+관게형 데이터베이스에서 중ㅂ족을 최소화하게 데이터를 구조화 하는 일련의 과정을 의미한다. 한국어로 번역하자면 "데이터(베이스) 정규화" 가 되겠다.
+
+## Revolve around something
+
+어떤 것을 중점적으로 다룬다는 의미를 가진 chunk 이다. revolve 라는 단어만 알고 "주축을 중심으로 회전한다" 정도로 해석했는데, 이상해서 찾아보니 이런 뜻이었다. 
+
+## End up with something
+
+"결국 어떻게 하게된다" 라는 의미를 가진 chunk 이다. 이 또한 직역해서 "이렇게 끝나버린다" 라는 의미인가? 싶었다가 마찬가지로 그렇게 해석을 했는데 이상해서 찾아보니 이런 뜻이었다.
