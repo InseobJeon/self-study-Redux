@@ -1,4 +1,4 @@
-<!-- # 08/25, redux(2) -->
+# 08/25, redux(2)
 
 # Learning `Redux` from scratch
 
@@ -716,6 +716,111 @@ const store = createStore(todoApp)
 Redux 의 아키텍처는 엄격한 단방향의 데이터 흐름(strict unidirectional data flow) 를 중요하게 여긴다. 
 
 이 말을 풀어서 설명하자면, (Redux를 통해 만든) 애플리케이션의 모든 데이터들은 동일한 life cycle pattern 에 따르며, 이 덕분에 내가 만든 애플리케이션의 코드의 결과물을 예상하기 쉬워지며, 또 이해하기 쉬워진다. 또한 이는 데이터 정규화(data normalization)을 더욱 쉽게끔 만들어 주기 때문에 각각 독립적이고, 여러 개의 같은 데이터가 복제되어 존재하는 일들을 막아준다, 즉 DB를 더 깔끔하게 짜는데 도움이 된다는 의미이다! 
+
+### The Life Cycle of Redux data
+
+Redux 로 만든 앱의 Life Cycle 은 4가지 절차를 거친다
+
+1. You can call `store.dispatch(action)`
+
+앞서 말 했듯, `action` 은 어떤 일이 일어날지에 대해 서술하는 `plain Object` 이다. 
+
+```jsx
+// examples of action
+{ type: "LIKE_ARTICLE", articleId: 42 }
+{ type: "FETCH_USER_SUCCESS", response: { id: 3, name: "Mary" } }
+{ type: "ADD_TODO", text: "Read the Redux docs" }
+```
+
+`action` 을 뉴스에 대한 단편적인 정보 정도로 간주해보자. 저 위의 `action` 들로 예를 들자면 "Mary 는 42 id 의 기사를 좋아한다", "'Read the Redux docs' 라는 TO DO 항목이 TO DO LIST 에 추가되었다" 등으로
+
+우리는 `store.dispatch(action)` 을 통해서 애플리케이션의 어느 위치에서든 action 을 불러올 수 있다. dispatch 라는 말의 사전적 의미를 생각해보자. "send off to a destination for a purpose", 특정한 목적 하에 어떠한 목적지로 (무언가를) 보내는 행위, 우리는 `store` 에 `action` 을 보낸다고(`dispatch`) 볼 수 있다. 보낼 수 있는 위치는 다양하다. `component` 에서도, `XHR` 에서도, 그리고 `scheduled interval` 에서도. (공식 문서에선 scheduled intervals 라는 용어가 나오는데, 검색해 보니 컴퓨터 과학 쪽 용어인 듯 하다. 다른 모르는 단어 및 개념들과는 달리, 이건 뭔가 찾아보려고 해도 뭔가 내가 이해할 수 있는 정보들이 아닌 듯 하여 일단은 넘어갔다)
+
+2. The Redux store calls the reducer function you gate it
+
+그 다음으로는 우리가 만들어 넘겨준 `reducer` 가 실행된다. `store` 는 `reducer` 에게 두 개의 인자(`arguments`) 를 넘겨주는데, 현재까지의 `state` 와 그리고 `action` 이다. 우리의 todo app 으로 한 번 예시를 들어보자
+
+```jsx
+// the current application state (list of todos and chosen filter)
+let prevState = {
+	visibleTodoFilter: "SHOW_ALL",
+	todos : [
+		{
+			text: "Read the docs.",
+			complete: false
+		}
+	]
+}
+
+// the action being performed (adding a todo)
+let action = {
+	type: "ADD_TODO",
+	text: "Understand the flow"
+}
+
+// your reducer returns the next application state
+let nextState = todoApp(prevState, action)
+```
+
+자, 다시 한 번 짚고 넘어가자. `reducer` 는 순수 함수이다. 단지 "다음 상태를 계산할 뿐" 인 함수이다. 반드시 어떤 일이 일어날 지 예상 가능해야 하며, 그렇기에 API 호출이나 router transition 과도 같은 방법들을 통해 side effects 를 발생시켜서는 안 된다. 같은 값이라면 몇 번을 reducer 에 집어넣어도 같은 결과물을 내보내줘야 하는 멱등성(`idempotent`) 을 보장해야 한다. 
+
+다시 data flow 라는 본론으로 돌아가자면, 해당 과정은 1번(`store.dispatch(action)`) 을 통한 store 로의 action 전달이 일어나기 전 발생하지 않는다. 
+
+3. the root reducer may combine the output of multiple reducers into a single state tree
+
+자, 이전에 했던 과정들을 다시 기억해보자. 우리는 reducer 를 하나로 다 구현했었다. 그러다가 "이렇게 하면 가독성이 너무 떨어지지 않을까?", 그리고 "굳이 관련이 없는 부분을 불러내는 데도 모든 state 를 호출해야할까?" 라는 생각에 그 reducer 들을 관리하는 state 를 기준으로 여러가지로 쪼개놓았었고, 마지막에는 그 reducer 들을 한 번에 묶어주는, `combineReducers()` 라는 메서드를 사용했었다. 
+
+```jsx
+function todos(state = [], action) {
+  // Somehow calculate it...
+  return nextState
+}
+
+function visibleTodoFilter(state = 'SHOW_ALL', action) {
+  // Somehow calculate it...
+  return nextState
+}
+
+let todoApp = combineReducers({
+  todos,
+  visibleTodoFilter
+})
+```
+
+저기 밑의 `combineReducer()` 로 구현한 부분의 작동원리에 대해서 다시금 살펴보자. 우리가 어떤 `action` 을 `store` 로 날려주면, 일단은 reducer 들이 작동이 된다. 
+
+```jsx
+let nextTodos = todos(state.todos, action)
+// then it returns todo's next state
+let nextVisibleTodoFilter = visibleTodoFIlter(state.visibleTodoFilter, action)
+// then it returns visible todo filter's next state
+```
+
+앞서 말 했듯 우리가 저렇게 `nextTodos`, 그리고 `nextVisibleTodoFilter` 로 reducer 들을 나눈 이유는 독립적인 영역의 상태를 관리해야 하는 경우를 깔끔하게 나눠놨었기 때문이고, 그렇게 독립적인 상태관리가 되었으면 다시 하나의 `store` 가 만들어질 수 있도록 합쳐주는 과정이 필요하다. 
+
+```jsx
+return {
+	todos: nextTodos,
+	visibleTodoFilter: nextVisibleTodoFilter
+}
+```
+
+하지만, `combineReducer()` 를 사용한다면 위와 같이 return 을 Object 형태로, 각각의 property 에 할당하는 식으로 저렇게 해 줄 필요가 없다는 점(you don't have to use it)
+
+```jsx
+let todoApp = combineReducers({
+  todos,
+  visibleTodoFilter
+})
+```
+
+이런 식으로 명시를 해 준다면, `todoApp` 이라는 통합된 reducer 가 위의 과정들을 진행해준다. 
+
+4. the Redux store saves the complete state tree returned by the root reducer(made by `combineReducers()` method)
+
+이제 내가 만든 애플리케이션의 `state` 들이 갱신되었다! `listener` 를 붙이고 싶을 때는 `store.subscribe(listener)` 를 통해서, 그리고 그 `listener` 들로 하여금 현재 `state` 를 참조하고 싶은 경우에는 `store.getState()` 를 통해서 활용해보자.
+
+이런 과정들을 거친 끝에, 드디어 UI 가 새로운 state 를 기반으로 바뀌게 되었다. 만약 `React Redux` 를 사용한다면, `component.setState(newState)` 이 지금 말한 과정에 해당될 것이다. 
 
 ---
 
